@@ -4,7 +4,7 @@ param(
 )
 
 if (-not $AppName) {
-    $AppName = "GraphiT-Template"
+    $AppName = "AutoExposure"
 }
 
 $CmdArgs = ""

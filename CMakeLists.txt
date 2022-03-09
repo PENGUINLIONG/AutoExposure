@@ -1,7 +1,7 @@
 ﻿cmake_minimum_required (VERSION 3.10)
 
 # Replace this with your project name.
-set(PROJECT_NAME "GraphiT-Template")
+set(PROJECT_NAME "AutoExposure")
 
 project (${PROJECT_NAME} LANGUAGES CXX)
 
@@ -33,8 +33,8 @@ endif()
 set(GFT_WITH_VULKAN ${WITH_VULKAN})
 set(GFT_WITH_GLSLANG ${WITH_GLSLANG})
 
-add_definitions(-DGFT_WITH_VULKAN=${WITH_VULKAN})
-add_definitions(-DGFT_WITH_GLSLANG=${WITH_GLSLANG})
+add_definitions(-DGFT_WITH_VULKAN=1)
+add_definitions(-DGFT_WITH_GLSLANG=1)
 
 add_subdirectory(third/graphi-t)
 
