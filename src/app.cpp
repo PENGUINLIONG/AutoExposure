@@ -39,25 +39,24 @@ void finalize() {
 }
 
 
-scoped::Invocation fill(const scoped::Image& img, const vmath::float4& value) {
+void fill(const scoped::Image& img, const std::vector<vmath::float4>& data) {
   static const char* comp_src = R"(
     #version 460
     layout(local_size_x_id=0, local_size_y_id=1, local_size_z_id=2) in;
 
-    layout(binding=0)
-    uniform Params {
-      vec4 value;
-    } u;
-
-    layout(binding=1, rgba16f)
-    writeonly image2D out_img;
+    layout(binding=0, rgba16f)
+    writeonly uniform image2D out_img;
+    layout(binding=1)
+    readonly buffer Data { vec4 data[]; };
 
     void main() {
-      ivec3 global_id = gl_GlobalInvocationID;
+      uvec3 global_id = gl_GlobalInvocationID;
       ivec2 out_img_size = imageSize(out_img);
       if (global_id.x > out_img_size.x || global_id.y > out_img_size.y) return;
 
-      imageStore(out_img, global_id.xy, u.value);
+      vec4 c = data[global_id.y * out_img_size.x + global_id.x];
+
+      imageStore(out_img, ivec2(global_id.xy), c);
     }
   )";
 
@@ -66,19 +65,23 @@ scoped::Invocation fill(const scoped::Image& img, const vmath::float4& value) {
 
   static scoped::Task task = CTXT.build_comp_task("fill")
     .comp(art.comp_spv)
-    .rsc(L_RESOURCE_TYPE_UNIFORM_BUFFER)
     .rsc(L_RESOURCE_TYPE_STORAGE_IMAGE)
+    .rsc(L_RESOURCE_TYPE_STORAGE_BUFFER)
+    .workgrp_size(8, 8, 1)
     .build();
 
-  auto params_buf = CTXT.build_buf()
-    .streaming_with(value)
-    .uniform()
+  auto data_buf = CTXT.build_buf()
+    .streaming_with(data)
+    .storage()
     .build();
 
-  return task.build_comp_invoke()
-    .rsc(params_buf.view())
+  task.build_comp_invoke()
     .rsc(img.view())
-    .build();
+    .rsc(data_buf.view())
+    .workgrp_count(util::div_up(img.cfg().width, 8), util::div_up(img.cfg().height, 8), 1)
+    .build()
+    .submit()
+    .wait();
 }
 
 float avg_cpu(
@@ -115,7 +118,7 @@ float avg_gpu(
     layout(binding=2)
     uniform sampler2D img;
 
-    float luminance(vec3 c) {
+    mediump float luminance(mediump vec3 c) {
       return 0.2126 * c.x + 0.7152 * c.y + 0.0722 * c.z;
     }
 
@@ -129,15 +132,20 @@ float avg_gpu(
       uint W = u.size.x;
       uint H = u.size.y;
 
-      vec2 size_coe = 1.0f / (vec2(W, H));
+      vec2 size_coe = 1.0f / vec2(W, H);
 
-      vec3 sum = vec3(0.0f, 0.0f, 0.0f);
-      for (uint w = local_id.x * 4; w < W; w += 32) {
-        for (uint h = local_id.y * 4; h < H; h += 32) {
-          sum += 4.0f * texture(img, vec2(w + 1.0, h + 1.0) * size_coe).rgb;
-          sum += 4.0f * texture(img, vec2(w + 3.0, h + 1.0) * size_coe).rgb;
-          sum += 4.0f * texture(img, vec2(w + 1.0, h + 3.0) * size_coe).rgb;
-          sum += 4.0f * texture(img, vec2(w + 3.0, h + 3.0) * size_coe).rgb;
+      mediump vec3 sum = vec3(0.0f, 0.0f, 0.0f);
+      for (uint w = global_id.x * 4; w < W; w += 64) {
+        for (uint h = global_id.y * 4; h < H; h += 64) {
+          mediump vec3 c0 = texture(img, vec2(w + 1.0, h + 1.0) * size_coe).rgb;
+          mediump vec3 c1 = texture(img, vec2(w + 3.0, h + 1.0) * size_coe).rgb;
+          mediump vec3 c2 = texture(img, vec2(w + 1.0, h + 3.0) * size_coe).rgb;
+          mediump vec3 c3 = texture(img, vec2(w + 3.0, h + 3.0) * size_coe).rgb;
+
+          sum += 4.0f * c0;
+          sum += 4.0f * c1;
+          sum += 4.0f * c2;
+          sum += 4.0f * c3;
         }
       }
       stage_sum[local_idx] = luminance(sum.rgb);
@@ -160,7 +168,7 @@ float avg_gpu(
       float out_sum =
         stage_sum[0] + stage_sum[1] + stage_sum[2] + stage_sum[3] +
         stage_sum[4] + stage_sum[5] + stage_sum[6] + stage_sum[7];
-      out_sum = out_sum / float(W * H);
+      out_sum = out_sum * 4.0 / float(W * H);
 
       imageStore(out_img, ivec2(workgrp_id.xy), out_sum.xxxx);
     }
@@ -187,30 +195,20 @@ float avg_gpu(
   scoped::Image img = CTXT.build_img()
     .width(width)
     .height(height)
-    .fmt(fmt::L_FORMAT_R32G32B32A32_SFLOAT)
+    .fmt(fmt::L_FORMAT_R16G16B16A16_SFLOAT)
     .storage()
     .sampled()
     .build();
-
-  scoped::Buffer img_stage_buf = CTXT.build_buf()
-    .streaming_with(data)
-    .build();
-
-  CTXT.build_trans_invoke()
-    .src(img_stage_buf.view())
-    .dst(img.view())
-    .build()
-    .submit()
-    .wait();
+  fill(img, data);
 
   scoped::Image out_img = CTXT.build_img()
-    .width(1)
-    .height(1)
+    .width(2)
+    .height(2)
     .fmt(fmt::L_FORMAT_R32_SFLOAT)
     .storage()
     .build();
 
-  float out_avg;
+  float out_avg[4];
   scoped::Buffer out_buf = CTXT.build_buf()
     .size_like(out_avg)
     .storage()
@@ -221,7 +219,7 @@ float avg_gpu(
     .rsc(params_buf.view())
     .rsc(out_img.view())
     .rsc(img.view())
-    .workgrp_count(1, 1, 1)
+    .workgrp_count(2, 2, 1)
     .is_timed()
     .build();
 
@@ -238,7 +236,7 @@ float avg_gpu(
 
   out_buf.map_read().read(out_avg);
 
-  return out_avg;
+  return 0.25f * (out_avg[0] + out_avg[1] + out_avg[2] + out_avg[3]);
 }
 
 void fuzz_avg() {
@@ -270,7 +268,7 @@ void fuzz_avg() {
   //run(2, 1);
   //run(1, 2);
   //run(2, 2);
-  run(4, 4);
+  //run(4, 4);
   run(8, 8);
   run(64, 8);
   run(8, 64);
