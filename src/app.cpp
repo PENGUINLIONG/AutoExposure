@@ -110,8 +110,8 @@ float avg_gpu(
       uvec2 size;
     } u;
 
-    layout(binding=1)
-    writeonly buffer Avg { float avg; };
+    layout(binding=1, r32f)
+    writeonly uniform image2D out_img;
     layout(binding=2)
     uniform sampler2D img;
 
@@ -123,6 +123,7 @@ float avg_gpu(
 
     void main() {
       uvec3 global_id = gl_GlobalInvocationID;
+      uvec3 workgrp_id = gl_WorkGroupID;
       uvec3 local_id = gl_LocalInvocationID;
       uint local_idx = gl_LocalInvocationIndex;
       uint W = u.size.x;
@@ -159,8 +160,9 @@ float avg_gpu(
       float out_sum =
         stage_sum[0] + stage_sum[1] + stage_sum[2] + stage_sum[3] +
         stage_sum[4] + stage_sum[5] + stage_sum[6] + stage_sum[7];
+      out_sum = out_sum / float(W * H);
 
-      avg = out_sum / float(W * H);
+      imageStore(out_img, ivec2(workgrp_id.xy), out_sum.xxxx);
     }
   )";
 
@@ -170,7 +172,7 @@ float avg_gpu(
   static scoped::Task task = CTXT.build_comp_task("avg")
     .comp(art.comp_spv)
     .rsc(L_RESOURCE_TYPE_UNIFORM_BUFFER)
-    .rsc(L_RESOURCE_TYPE_STORAGE_BUFFER)
+    .rsc(L_RESOURCE_TYPE_STORAGE_IMAGE)
     .rsc(L_RESOURCE_TYPE_SAMPLED_IMAGE)
     .build();
 
@@ -201,6 +203,13 @@ float avg_gpu(
     .submit()
     .wait();
 
+  scoped::Image out_img = CTXT.build_img()
+    .width(1)
+    .height(1)
+    .fmt(fmt::L_FORMAT_R32_SFLOAT)
+    .storage()
+    .build();
+
   float out_avg;
   scoped::Buffer out_buf = CTXT.build_buf()
     .size_like(out_avg)
@@ -210,13 +219,20 @@ float avg_gpu(
 
   auto invoke = task.build_comp_invoke()
     .rsc(params_buf.view())
-    .rsc(out_buf.view())
+    .rsc(out_img.view())
     .rsc(img.view())
     .workgrp_count(1, 1, 1)
     .is_timed()
     .build();
 
   invoke.submit().wait();
+
+  CTXT.build_trans_invoke()
+    .src(out_img.view())
+    .dst(out_buf.view())
+    .build()
+    .submit()
+    .wait();
 
   log::info("[", width, "x", height, "] ", invoke.get_time_us(), "us");
 
