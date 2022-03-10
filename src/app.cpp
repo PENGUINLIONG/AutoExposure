@@ -130,9 +130,12 @@ float avg_gpu(
 
       float sum = 0.0f;
       if (global_id.x <= W && global_id.y <= H) {
-        for (uint w = local_id.x * 2; w < W; w += 16) {
-          for (uint h = local_id.y * 2; h < H; h += 16) {
+        for (uint w = local_id.x * 4; w < W; w += 32) {
+          for (uint h = local_id.y * 4; h < H; h += 32) {
             sum += luminance(texture(img, vec2(w + 1.0, h + 1.0) / vec2(W, H)).rgb * 4.0);
+            sum += luminance(texture(img, vec2(w + 3.0, h + 1.0) / vec2(W, H)).rgb * 4.0);
+            sum += luminance(texture(img, vec2(w + 1.0, h + 3.0) / vec2(W, H)).rgb * 4.0);
+            sum += luminance(texture(img, vec2(w + 3.0, h + 3.0) / vec2(W, H)).rgb * 4.0);
           }
         }
       }
@@ -250,7 +253,8 @@ void fuzz_avg() {
   //run(1, 1);
   //run(2, 1);
   //run(1, 2);
-  run(2, 2);
+  //run(2, 2);
+  run(4, 4);
   run(8, 8);
   run(64, 8);
   run(8, 64);
