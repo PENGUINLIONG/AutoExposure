@@ -132,10 +132,7 @@ float avg_gpu(
       if (global_id.x <= W && global_id.y <= H) {
         for (uint w = local_id.x * 2; w < W; w += 16) {
           for (uint h = local_id.y * 2; h < H; h += 16) {
-            sum += luminance(texelFetch(img, ivec2(w + 0, h + 0), 0).rgb);
-            sum += luminance(texelFetch(img, ivec2(w + 1, h + 0), 0).rgb);
-            sum += luminance(texelFetch(img, ivec2(w + 0, h + 1), 0).rgb);
-            sum += luminance(texelFetch(img, ivec2(w + 1, h + 1), 0).rgb);
+            sum += luminance(texture(img, vec2(w + 1.0, h + 1.0) / vec2(W, H)).rgb * 4.0);
           }
         }
       }
