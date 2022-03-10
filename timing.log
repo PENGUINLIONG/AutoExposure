@@ -1,12 +1,15 @@
-[1x1] 7.872us
-[2x1] 5.12us
-[1x2] 5.216us
-[2x2] 7.008us
-[8x8] 4.704us
-[64x8] 7.264us
-[8x64] 5.408us
-[64x64] 11.968us
-[512x64] 67.776us
-[64x512] 56.096us
-[512x512] 409.28us
-[1024x768] 1212.38us
+[INFO] vulkan backend initialized
+[WARN] cannot find a suitable queue family for PRESENT
+[INFO] hello, world!
+[INFO] glslang version: 11.5.0
+[INFO] supported glsl version: 4.60 glslang Khronos. 11.5.0
+[INFO] [2x2] 13.0208us
+[INFO] [8x8] 10.6771us
+[INFO] [64x8] 14.8958us
+[INFO] [8x64] 14.5312us
+[INFO] [64x64] 44.7917us
+[INFO] [512x64] 282.604us
+[INFO] [64x512] 277.708us
+[INFO] [512x512] 2173.39us
+[INFO] [1024x768] 6492.34us
+[INFO] fuzzed avg
