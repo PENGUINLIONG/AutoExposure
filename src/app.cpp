@@ -128,18 +128,18 @@ float avg_gpu(
       uint W = u.size.x;
       uint H = u.size.y;
 
-      float sum = 0.0f;
-      if (global_id.x <= W && global_id.y <= H) {
-        for (uint w = local_id.x * 4; w < W; w += 32) {
-          for (uint h = local_id.y * 4; h < H; h += 32) {
-            sum += luminance(texture(img, vec2(w + 1.0, h + 1.0) / vec2(W, H)).rgb * 4.0);
-            sum += luminance(texture(img, vec2(w + 3.0, h + 1.0) / vec2(W, H)).rgb * 4.0);
-            sum += luminance(texture(img, vec2(w + 1.0, h + 3.0) / vec2(W, H)).rgb * 4.0);
-            sum += luminance(texture(img, vec2(w + 3.0, h + 3.0) / vec2(W, H)).rgb * 4.0);
-          }
+      vec2 size_coe = 1.0f / (vec2(W, H));
+
+      vec3 sum = vec3(0.0f, 0.0f, 0.0f);
+      for (uint w = local_id.x * 4; w < W; w += 32) {
+        for (uint h = local_id.y * 4; h < H; h += 32) {
+          sum += 4.0f * texture(img, vec2(w + 1.0, h + 1.0) * size_coe).rgb;
+          sum += 4.0f * texture(img, vec2(w + 3.0, h + 1.0) * size_coe).rgb;
+          sum += 4.0f * texture(img, vec2(w + 1.0, h + 3.0) * size_coe).rgb;
+          sum += 4.0f * texture(img, vec2(w + 3.0, h + 3.0) * size_coe).rgb;
         }
       }
-      stage_sum[local_idx] = sum;
+      stage_sum[local_idx] = luminance(sum.rgb);
 
       memoryBarrierShared();
       barrier();
@@ -156,11 +156,11 @@ float avg_gpu(
       memoryBarrierShared();
       barrier();
       if (local_idx > 0) { return; }
-      sum =
+      float out_sum =
         stage_sum[0] + stage_sum[1] + stage_sum[2] + stage_sum[3] +
         stage_sum[4] + stage_sum[5] + stage_sum[6] + stage_sum[7];
 
-      avg = sum / float(W * H);
+      avg = out_sum / float(W * H);
     }
   )";
 
@@ -244,7 +244,7 @@ void fuzz_avg() {
     float cpu_res = avg_cpu(data, WIDTH, HEIGHT);
     float gpu_res = avg_gpu(data, WIDTH, HEIGHT);
 
-    if (std::fabs(cpu_res - gpu_res) > 1e-3) {
+    if (std::fabs(cpu_res - gpu_res) > 0.1) {
       log::error("expect=", cpu_res, "; actual=", gpu_res);
       panic();
     }

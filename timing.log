@@ -3,13 +3,13 @@
 [INFO] hello, world!
 [INFO] glslang version: 11.5.0
 [INFO] supported glsl version: 4.60 glslang Khronos. 11.5.0
-[INFO] [4x4] 13.5937us
-[INFO] [8x8] 10.8333us
-[INFO] [64x8] 13.125us
-[INFO] [8x64] 15us
-[INFO] [64x64] 25.5729us
-[INFO] [512x64] 119.375us
-[INFO] [64x512] 114.635us
-[INFO] [512x512] 838.958us
-[INFO] [1024x768] 2549.58us
+[INFO] [4x4] 13.9583us
+[INFO] [8x8] 10.5729us
+[INFO] [64x8] 12.2917us
+[INFO] [8x64] 14.2708us
+[INFO] [64x64] 23.6979us
+[INFO] [512x64] 111.615us
+[INFO] [64x512] 109.427us
+[INFO] [512x512] 807.083us
+[INFO] [1024x768] 2377.24us
 [INFO] fuzzed avg
