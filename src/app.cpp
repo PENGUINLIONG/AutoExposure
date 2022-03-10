@@ -103,7 +103,7 @@ float avg_gpu(
 ) {
   static const char* comp_src = R"(
     #version 460
-    layout(local_size_x_id=0, local_size_y_id=1, local_size_y_id=2) in;
+    layout(local_size_x=8, local_size_y=2, local_size_z=1) in;
 
     layout(binding=0)
     uniform Params {
@@ -116,22 +116,35 @@ float avg_gpu(
     uniform sampler2D img;
 
     float luminance(vec3 c) {
-      return 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
+      return 0.2126 * c.x + 0.7152 * c.y + 0.0722 * c.z;
     }
+
+    shared float[64] stage_sum;
 
     void main() {
       uvec3 global_id = gl_GlobalInvocationID;
+      uvec3 local_id = gl_LocalInvocationID;
+      uint local_idx = gl_LocalInvocationIndex;
       uint W = u.size.x;
       uint H = u.size.y;
 
-      if (global_id.x > 0 || global_id.y > 0) return;
-
       float sum = 0.0f;
-      for (uint w = 0; w < W; ++w) {
-        for (uint h = 0; h < H; ++h) {
+      if (global_id.x > W || global_id.y > H) { return; }
+
+      for (uint w = local_id.x; w < W; w += 8) {
+        for (uint h = local_id.y; h < H; h += 1) {
           sum += luminance(texelFetch(img, ivec2(w, h), 0).rgb);
         }
       }
+      stage_sum[local_idx] = sum;
+
+      memoryBarrierShared();
+      barrier();
+      if (local_idx > 0) { return; }
+
+      sum =
+        stage_sum[0] + stage_sum[1] + stage_sum[2] + stage_sum[3] +
+        stage_sum[4] + stage_sum[5] + stage_sum[6] + stage_sum[7];
 
       avg = sum / float(W * H);
     }
@@ -145,7 +158,6 @@ float avg_gpu(
     .rsc(L_RESOURCE_TYPE_UNIFORM_BUFFER)
     .rsc(L_RESOURCE_TYPE_STORAGE_BUFFER)
     .rsc(L_RESOURCE_TYPE_SAMPLED_IMAGE)
-    .workgrp_size(1, 1, 1)
     .build();
 
   scoped::GcScope gc();
@@ -248,15 +260,15 @@ void guarded_main() {
 
 int main(int argc, const char** argv) {
   initialize(argc, argv);
-  //try {
+  try {
     guarded_main();
-  //} catch (const std::exception& e) {
-  //  liong::log::error("application threw an exception");
-  //  liong::log::error(e.what());
-  //  liong::log::error("application cannot continue");
-  //} catch (...) {
-  //  liong::log::error("application threw an illiterate exception");
-  //}
+  } catch (const std::exception& e) {
+    liong::log::error("application threw an exception");
+    liong::log::error(e.what());
+    liong::log::error("application cannot continue");
+  } catch (...) {
+    liong::log::error("application threw an illiterate exception");
+  }
   finalize();
 
   return 0;
