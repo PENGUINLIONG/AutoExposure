@@ -199,9 +199,12 @@ float avg_gpu(
     .rsc(out_buf.view())
     .rsc(img.view())
     .workgrp_count(1, 1, 1)
+    .is_timed()
     .build();
 
   invoke.submit().wait();
+
+  log::info("[", width, "x", height, "] ", invoke.get_time_us(), "us");
 
   out_buf.map_read().read(out_avg);
 
