@@ -114,7 +114,7 @@ float avg_gpu(
     } u;
 
     layout(binding=1, r32f)
-    writeonly uniform image2D out_img;
+    writeonly uniform image3D out_img;
     layout(binding=2)
     uniform sampler2D img;
 
@@ -135,7 +135,7 @@ float avg_gpu(
       vec2 size_coe = 1.0f / vec2(W, H);
 
       mediump vec3 sum = vec3(0.0f, 0.0f, 0.0f);
-      for (uint w = global_id.x * 4; w < W; w += 64) {
+      for (uint w = (global_id.z * 16 + global_id.x) * 4; w < W; w += 128) {
         for (uint h = global_id.y * 4; h < H; h += 64) {
           mediump vec3 c0 = texture(img, vec2(w + 1.0, h + 1.0) * size_coe).rgb;
           mediump vec3 c1 = texture(img, vec2(w + 3.0, h + 1.0) * size_coe).rgb;
@@ -168,9 +168,9 @@ float avg_gpu(
       float out_sum =
         stage_sum[0] + stage_sum[1] + stage_sum[2] + stage_sum[3] +
         stage_sum[4] + stage_sum[5] + stage_sum[6] + stage_sum[7];
-      out_sum = out_sum * 4.0 / float(W * H);
+      out_sum = out_sum * 8.0 / float(W * H);
 
-      imageStore(out_img, ivec2(workgrp_id.xy), out_sum.xxxx);
+      imageStore(out_img, ivec3(workgrp_id.xyz), out_sum.xxxx);
     }
   )";
 
@@ -204,11 +204,12 @@ float avg_gpu(
   scoped::Image out_img = CTXT.build_img()
     .width(2)
     .height(2)
+    .depth(2)
     .fmt(fmt::L_FORMAT_R32_SFLOAT)
     .storage()
     .build();
 
-  float out_avg[4];
+  std::vector<float> out_avg(8);
   scoped::Buffer out_buf = CTXT.build_buf()
     .size_like(out_avg)
     .storage()
@@ -219,7 +220,7 @@ float avg_gpu(
     .rsc(params_buf.view())
     .rsc(out_img.view())
     .rsc(img.view())
-    .workgrp_count(2, 2, 1)
+    .workgrp_count(2, 2, 2)
     .is_timed()
     .build();
 
@@ -236,7 +237,9 @@ float avg_gpu(
 
   out_buf.map_read().read(out_avg);
 
-  return 0.25f * (out_avg[0] + out_avg[1] + out_avg[2] + out_avg[3]);
+  return 0.125f * (
+    out_avg[0] + out_avg[1] + out_avg[2] + out_avg[3] +
+    out_avg[4] + out_avg[5] + out_avg[6] + out_avg[7]);
 }
 
 void fuzz_avg() {
@@ -258,7 +261,7 @@ void fuzz_avg() {
     float cpu_res = avg_cpu(data, WIDTH, HEIGHT);
     float gpu_res = avg_gpu(data, WIDTH, HEIGHT);
 
-    if (std::fabs(cpu_res - gpu_res) > 0.1) {
+    if (std::fabs(cpu_res - gpu_res) > 1e-3) {
       log::error("expect=", cpu_res, "; actual=", gpu_res);
       panic();
     }
@@ -273,10 +276,12 @@ void fuzz_avg() {
   run(64, 8);
   run(8, 64);
   run(64, 64);
+  run(128, 64);
   run(512, 64);
   run(64, 512);
   run(512, 512);
   run(1024, 768);
+  run(1920, 1080);
   log::info("fuzzed avg");
 }
 

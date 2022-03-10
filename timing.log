@@ -5,10 +5,12 @@
 [INFO] supported glsl version: 4.60 glslang Khronos. 11.5.0
 [INFO] [8x8] 9.79167us
 [INFO] [64x8] 9.94792us
-[INFO] [8x64] 9.94792us
-[INFO] [64x64] 11.7187us
-[INFO] [512x64] 30.9375us
-[INFO] [64x512] 28.8542us
-[INFO] [512x512] 146.979us
-[INFO] [1024x768] 416.198us
+[INFO] [8x64] 10us
+[INFO] [64x64] 11.8229us
+[INFO] [128x64] 14.0104us
+[INFO] [512x64] 26.3542us
+[INFO] [64x512] 30.4167us
+[INFO] [512x512] 139.635us
+[INFO] [1024x768] 397.5us
+[INFO] [1920x1080] 1037.4us
 [INFO] fuzzed avg
