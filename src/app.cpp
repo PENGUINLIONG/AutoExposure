@@ -103,7 +103,7 @@ float avg_gpu(
 ) {
   static const char* comp_src = R"(
     #version 460
-    layout(local_size_x=8, local_size_y=2, local_size_z=1) in;
+    layout(local_size_x=8, local_size_y=8, local_size_z=1) in;
 
     layout(binding=0)
     uniform Params {
@@ -132,7 +132,7 @@ float avg_gpu(
       if (global_id.x > W || global_id.y > H) { return; }
 
       for (uint w = local_id.x; w < W; w += 8) {
-        for (uint h = local_id.y; h < H; h += 1) {
+        for (uint h = local_id.y; h < H; h += 8) {
           sum += luminance(texelFetch(img, ivec2(w, h), 0).rgb);
         }
       }
@@ -140,8 +140,19 @@ float avg_gpu(
 
       memoryBarrierShared();
       barrier();
-      if (local_idx > 0) { return; }
+      if (local_idx > 8) { return; }
+      stage_sum[local_idx] +=
+        stage_sum[local_idx + 8] +
+        stage_sum[local_idx + 16] +
+        stage_sum[local_idx + 24] +
+        stage_sum[local_idx + 32] +
+        stage_sum[local_idx + 40] +
+        stage_sum[local_idx + 48] +
+        stage_sum[local_idx + 56];
 
+      memoryBarrierShared();
+      barrier();
+      if (local_idx > 0) { return; }
       sum =
         stage_sum[0] + stage_sum[1] + stage_sum[2] + stage_sum[3] +
         stage_sum[4] + stage_sum[5] + stage_sum[6] + stage_sum[7];
